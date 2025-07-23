@@ -77,7 +77,6 @@ def gerar_qrcode(
     qr.add_data(data)
     qr.make(fit=True)
 
-    # Usa sempre tupla RGB, nunca string, para evitar erro
     fg_rgb = ImageColor.getrgb(fg_color)
     bg_rgb = ImageColor.getrgb(bg_color)
 
@@ -113,7 +112,6 @@ class QRCodeApp(ctk.CTk):
         self.logo_path = None
         self.qr_img_pil = None
         self.mode = "light"
-        # QR padrão: quadradinhos brancos, fundo preto!
         self.fg_color = "#FFFFFF"
         self.bg_color = "#000000"
 
@@ -168,21 +166,28 @@ class QRCodeApp(ctk.CTk):
 
         self.dyn_frame = ctk.CTkFrame(left, fg_color="transparent")
         self.dyn_frame.grid(row=row, column=0, sticky="we", padx=4, pady=2)
+        self.dyn_frame.columnconfigure(0, weight=1)  # --- ADICIONADO (campos sempre expandem)
         self._criar_campos_dinamicos("Texto")
         row += 1
 
         ctk.CTkLabel(left, text="Personalização", anchor="w", font=ctk.CTkFont(weight="bold")).grid(row=row, column=0, sticky="we", padx=12, pady=(16,2))
         row += 1
 
-        # PRIMEIRO: cor do QR (quadradinhos brancos)
-        btn_fg = ctk.CTkButton(left, text="Cor dos Quadradinhos (branco)", command=lambda:self._pick_color('bg'))
-        btn_fg.grid(row=row, column=0, sticky="we", padx=12, pady=6)
+        # --- COR DOS QUADRADINHOS (BRANCO) ---
+        self.fg_color_btn = ctk.CTkButton(left, text="Cor dos Quadradinhos (branco)", command=lambda:self._pick_color('fg'))
+        self.fg_color_btn.grid(row=row, column=0, sticky="we", padx=12, pady=6)
         row += 1
+        # Preview de cor
+        self.fg_color_preview = ctk.CTkLabel(self.fg_color_btn, width=20, height=20, text="", corner_radius=10)
+        self.fg_color_preview.place(relx=0.92, rely=0.5, anchor="center")
 
-        # DEPOIS: cor de fundo (preto)
-        btn_bg = ctk.CTkButton(left, text="Cor de Fundo (preto)", command=lambda:self._pick_color('fg'))
-        btn_bg.grid(row=row, column=0, sticky="we", padx=12, pady=6)
+        # --- COR DE FUNDO (PRETO) ---
+        self.bg_color_btn = ctk.CTkButton(left, text="Cor de Fundo (preto)", command=lambda:self._pick_color('bg'))
+        self.bg_color_btn.grid(row=row, column=0, sticky="we", padx=12, pady=6)
         row += 1
+        self.bg_color_preview = ctk.CTkLabel(self.bg_color_btn, width=20, height=20, text="", corner_radius=10)
+        self.bg_color_preview.place(relx=0.92, rely=0.5, anchor="center")
+        self._update_color_previews()  # --- ATUALIZA preview das cores
 
         ctk.CTkLabel(left, text="Formato dos Módulos", anchor="w").grid(row=row, column=0, sticky="we", padx=12, pady=(14,2))
         row += 1
@@ -234,11 +239,14 @@ class QRCodeApp(ctk.CTk):
         preview_card = ctk.CTkFrame(right, fg_color="#fff", corner_radius=18)
         preview_card.grid(row=0, column=0, sticky="nwe", padx=32, pady=(30,12))
         preview_card.columnconfigure(0, weight=1)
+        preview_card.rowconfigure(0, weight=1)
+        preview_card.rowconfigure(1, weight=1)
 
-        self.preview_label = ctk.CTkLabel(preview_card, text="Preview", anchor="center", font=ctk.CTkFont(size=14, slant="italic"))
-        self.preview_label.grid(row=0, column=0, padx=20, pady=(16,8))
+        # Preview centralizado e maior
+        self.preview_label = ctk.CTkLabel(preview_card, text="Preview", anchor="center", font=ctk.CTkFont(size=16, slant="italic"))
+        self.preview_label.grid(row=0, column=0, padx=40, pady=(22,8), sticky="nsew")
         self.preview_canvas = ctk.CTkLabel(preview_card, text="", anchor="center")
-        self.preview_canvas.grid(row=1, column=0, padx=18, pady=(0,16))
+        self.preview_canvas.grid(row=1, column=0, padx=28, pady=(0,22), sticky="nsew")
 
         btns = ctk.CTkFrame(right, fg_color="transparent")
         btns.grid(row=1, column=0, sticky="ew", padx=34, pady=(10,4))
@@ -270,65 +278,71 @@ class QRCodeApp(ctk.CTk):
             w.destroy()
         self.campos_dyn = {}
 
-        def grid_dyn(widget, row):
-            widget.grid(row=row, column=0, sticky="we", padx=6, pady=3)
+        def grid_dyn(widget, row, h=38):
+            # sticky="we" + columnconfigure garante expansão horizontal
+            widget.grid(row=row, column=0, sticky="we", padx=6, pady=4)
+            widget.configure(height=h)
 
         if tipo == "Texto":
-            entry = ctk.CTkEntry(self.dyn_frame, placeholder_text="Digite o texto para o QR Code")
-            grid_dyn(entry, 0)
+            entry = ctk.CTkEntry(self.dyn_frame, placeholder_text="Digite o texto para o QR Code", height=38)
+            grid_dyn(entry, 0, h=38)
             self.campos_dyn["text"] = entry
 
         elif tipo == "URL":
-            entry = ctk.CTkEntry(self.dyn_frame, placeholder_text="Cole ou digite uma URL (https://...)")
-            grid_dyn(entry, 0)
+            entry = ctk.CTkEntry(self.dyn_frame, placeholder_text="Cole ou digite uma URL (https://...)", height=38)
+            grid_dyn(entry, 0, h=38)
             self.campos_dyn["url"] = entry
 
         elif tipo == "Telefone":
-            entry = ctk.CTkEntry(self.dyn_frame, placeholder_text="Digite o telefone (com DDD)")
-            grid_dyn(entry, 0)
+            entry = ctk.CTkEntry(self.dyn_frame, placeholder_text="Digite o telefone (com DDD)", height=38)
+            grid_dyn(entry, 0, h=38)
             self.campos_dyn["tel"] = entry
 
         elif tipo == "WiFi":
-            ssid = ctk.CTkEntry(self.dyn_frame, placeholder_text="SSID (nome da rede)")
-            grid_dyn(ssid, 0)
-            password = ctk.CTkEntry(self.dyn_frame, placeholder_text="Senha")
-            grid_dyn(password, 1)
+            ssid = ctk.CTkEntry(self.dyn_frame, placeholder_text="SSID (nome da rede)", height=32)
+            grid_dyn(ssid, 0, h=32)
+            password = ctk.CTkEntry(self.dyn_frame, placeholder_text="Senha", height=32)
+            grid_dyn(password, 1, h=32)
             crypto = ctk.CTkComboBox(self.dyn_frame, values=["WPA", "WEP", "nopass"])
             crypto.set("WPA")
-            grid_dyn(crypto, 2)
+            crypto.grid(row=2, column=0, sticky="we", padx=6, pady=3)
             self.campos_dyn["ssid"] = ssid
             self.campos_dyn["password"] = password
             self.campos_dyn["crypto"] = crypto
 
         elif tipo == "E-mail":
-            entry = ctk.CTkEntry(self.dyn_frame, placeholder_text="Digite o e-mail")
-            grid_dyn(entry, 0)
+            entry = ctk.CTkEntry(self.dyn_frame, placeholder_text="Digite o e-mail", height=38)
+            grid_dyn(entry, 0, h=38)
             self.campos_dyn["email"] = entry
 
         elif tipo == "Contato (vCard)":
-            name = ctk.CTkEntry(self.dyn_frame, placeholder_text="Nome")
-            grid_dyn(name, 0)
-            tel = ctk.CTkEntry(self.dyn_frame, placeholder_text="Telefone")
-            grid_dyn(tel, 1)
-            email = ctk.CTkEntry(self.dyn_frame, placeholder_text="E-mail")
-            grid_dyn(email, 2)
+            name = ctk.CTkEntry(self.dyn_frame, placeholder_text="Nome", height=32)
+            grid_dyn(name, 0, h=32)
+            tel = ctk.CTkEntry(self.dyn_frame, placeholder_text="Telefone", height=32)
+            grid_dyn(tel, 1, h=32)
+            email = ctk.CTkEntry(self.dyn_frame, placeholder_text="E-mail", height=32)
+            grid_dyn(email, 2, h=32)
             self.campos_dyn["name"] = name
             self.campos_dyn["tel"] = tel
             self.campos_dyn["email"] = email
 
         elif tipo == "PIX":
-            chave = ctk.CTkEntry(self.dyn_frame, placeholder_text="Chave PIX (e-mail, tel, CPF...)")
-            grid_dyn(chave, 0)
-            nome = ctk.CTkEntry(self.dyn_frame, placeholder_text="Nome do beneficiário")
-            grid_dyn(nome, 1)
-            cidade = ctk.CTkEntry(self.dyn_frame, placeholder_text="Cidade")
-            grid_dyn(cidade, 2)
-            valor = ctk.CTkEntry(self.dyn_frame, placeholder_text="Valor (opcional)")
-            grid_dyn(valor, 3)
+            chave = ctk.CTkEntry(self.dyn_frame, placeholder_text="Chave PIX (e-mail, tel, CPF...)", height=32)
+            grid_dyn(chave, 0, h=32)
+            nome = ctk.CTkEntry(self.dyn_frame, placeholder_text="Nome do beneficiário", height=32)
+            grid_dyn(nome, 1, h=32)
+            cidade = ctk.CTkEntry(self.dyn_frame, placeholder_text="Cidade", height=32)
+            grid_dyn(cidade, 2, h=32)
+            valor = ctk.CTkEntry(self.dyn_frame, placeholder_text="Valor (opcional)", height=32)
+            grid_dyn(valor, 3, h=32)
             self.campos_dyn["chave"] = chave
             self.campos_dyn["nome"] = nome
             self.campos_dyn["cidade"] = cidade
             self.campos_dyn["valor"] = valor
+
+    def _update_color_previews(self):
+        self.fg_color_preview.configure(bg_color=self.fg_color)
+        self.bg_color_preview.configure(bg_color=self.bg_color)
 
     def _atualizar_campos(self, event=None):
         self._criar_campos_dinamicos(self.tipo_var.get())
@@ -345,6 +359,7 @@ class QRCodeApp(ctk.CTk):
                 self.fg_color = color
             elif which == 'bg':
                 self.bg_color = color
+            self._update_color_previews()
             self._update_preview_img()
 
     def _selecionar_logo(self):
@@ -440,9 +455,9 @@ class QRCodeApp(ctk.CTk):
             v.delete(0, "end")
         self.logo_path = None
         self.logo_preview.configure(text="(sem logo)")
-        # Reset para padrão: quadradinho branco, fundo preto!
         self.fg_color = "#FFFFFF"
         self.bg_color = "#000000"
+        self._update_color_previews()
         self._update_preview_img()
         self._mostrar_msg("Campos e cores resetados.", error=False)
         self._limpar_preview()
