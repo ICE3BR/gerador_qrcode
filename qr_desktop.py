@@ -15,7 +15,7 @@ from qrcode.image.styles.moduledrawers import (
 )
 
 try:
-    from brcode.pix import Pix
+    from brcode import Pix
     HAS_PIX = True
 except ImportError:
     HAS_PIX = False
@@ -59,6 +59,8 @@ def gerar_qrcode(
         module_style="quadrado",
         logo_path=None,
         auto_resize_logo=True,
+        error_correction='H',
+        box_size=10
     ):
     MODS = {
         "quadrado": SquareModuleDrawer(),
@@ -68,10 +70,17 @@ def gerar_qrcode(
     }
     drawer = MODS.get(module_style, SquareModuleDrawer())
 
+    EC_DICT = {
+        'L': qrcode.constants.ERROR_CORRECT_L,
+        'M': qrcode.constants.ERROR_CORRECT_M,
+        'Q': qrcode.constants.ERROR_CORRECT_Q,
+        'H': qrcode.constants.ERROR_CORRECT_H,
+    }
+
     qr = qrcode.QRCode(
         version=None,
-        error_correction=qrcode.constants.ERROR_CORRECT_H,
-        box_size=10,
+        error_correction=EC_DICT.get(error_correction, qrcode.constants.ERROR_CORRECT_H),
+        box_size=box_size,
         border=border,
     )
     qr.add_data(data)
@@ -107,13 +116,18 @@ class QRCodeApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Gerador de QR Code")
-        self.geometry("950x640")
-        self.minsize(700, 460)
+        self.geometry("950x680")
+        self.minsize(700, 480)
         self.logo_path = None
         self.qr_img_pil = None
         self.mode = "light"
         self.fg_color = "#FFFFFF"
         self.bg_color = "#000000"
+
+        # Novos parâmetros
+        self.error_correction_var = ctk.StringVar(value="Máxima (H)")
+        self.box_size_var = ctk.IntVar(value=10)
+        self.size_var = ctk.IntVar(value=400)
 
         self._build_ui()
         self._bind_resize()
@@ -143,12 +157,10 @@ class QRCodeApp(ctk.CTk):
         main.columnconfigure(1, weight=3)
         main.rowconfigure(0, weight=1)
 
-        left = ctk.CTkFrame(main, corner_radius=20)
-        left.grid(row=0, column=0, sticky="nswe", padx=(0,16), pady=8)
-        left.columnconfigure(0, weight=1)
-        for i in range(20):
-            left.rowconfigure(i, weight=0)
-
+        left_scroll = ctk.CTkScrollableFrame(main, corner_radius=20, label_text=None)
+        left_scroll.grid(row=0, column=0, sticky="nswe", padx=(0,16), pady=8)
+        left_scroll.columnconfigure(0, weight=1)
+        left = left_scroll  # para o resto do código funcionar igual
         row = 0
         tipo_lbl = ctk.CTkLabel(left, text="Tipo de QR Code", anchor="w")
         tipo_lbl.grid(row=row, column=0, sticky="we", padx=12, pady=(18,2))
@@ -166,28 +178,26 @@ class QRCodeApp(ctk.CTk):
 
         self.dyn_frame = ctk.CTkFrame(left, fg_color="transparent")
         self.dyn_frame.grid(row=row, column=0, sticky="we", padx=4, pady=2)
-        self.dyn_frame.columnconfigure(0, weight=1)  # --- ADICIONADO (campos sempre expandem)
+        self.dyn_frame.columnconfigure(0, weight=1)
         self._criar_campos_dinamicos("Texto")
         row += 1
 
         ctk.CTkLabel(left, text="Personalização", anchor="w", font=ctk.CTkFont(weight="bold")).grid(row=row, column=0, sticky="we", padx=12, pady=(16,2))
         row += 1
 
-        # --- COR DOS QUADRADINHOS (BRANCO) ---
-        self.fg_color_btn = ctk.CTkButton(left, text="Cor dos Quadradinhos (branco)", command=lambda:self._pick_color('fg'))
+        # COR DOS QUADRADINHOS (PRETO) - deve alterar o BG do QR
+        self.fg_color_btn = ctk.CTkButton(left, text="Cor dos Quadradinhos (preto)", command=lambda:self._pick_color('bg'))
         self.fg_color_btn.grid(row=row, column=0, sticky="we", padx=12, pady=6)
         row += 1
-        # Preview de cor
         self.fg_color_preview = ctk.CTkLabel(self.fg_color_btn, width=20, height=20, text="", corner_radius=10)
         self.fg_color_preview.place(relx=0.92, rely=0.5, anchor="center")
 
-        # --- COR DE FUNDO (PRETO) ---
-        self.bg_color_btn = ctk.CTkButton(left, text="Cor de Fundo (preto)", command=lambda:self._pick_color('bg'))
+        # COR DE FUNDO (BRANCO) - deve alterar o FG do QR
+        self.bg_color_btn = ctk.CTkButton(left, text="Cor de Fundo (branco)", command=lambda:self._pick_color('fg'))
         self.bg_color_btn.grid(row=row, column=0, sticky="we", padx=12, pady=6)
         row += 1
         self.bg_color_preview = ctk.CTkLabel(self.bg_color_btn, width=20, height=20, text="", corner_radius=10)
         self.bg_color_preview.place(relx=0.92, rely=0.5, anchor="center")
-        self._update_color_previews()  # --- ATUALIZA preview das cores
 
         ctk.CTkLabel(left, text="Formato dos Módulos", anchor="w").grid(row=row, column=0, sticky="we", padx=12, pady=(14,2))
         row += 1
@@ -200,12 +210,28 @@ class QRCodeApp(ctk.CTk):
         mod_cmb.grid(row=row, column=0, sticky="we", padx=12, pady=6)
         row += 1
 
+        # Tamanho do QR
         ctk.CTkLabel(left, text="Tamanho do QR", anchor="w").grid(row=row, column=0, sticky="we", padx=12, pady=(14,2))
         row += 1
+        self.size_slider = ctk.CTkSlider(left, from_=128, to=1024, variable=self.size_var)
+        self.size_slider.grid(row=row, column=0, sticky="we", padx=16, pady=6)
+        row += 1
 
-        self.size_var = ctk.IntVar(value=400)
-        size_slider = ctk.CTkSlider(left, from_=128, to=1024, variable=self.size_var, number_of_steps=9)
-        size_slider.grid(row=row, column=0, sticky="we", padx=16, pady=6)
+        # CORREÇÃO DE ERRO
+        ctk.CTkLabel(left, text="Nível de Correção de Erro", anchor="w").grid(row=row, column=0, sticky="we", padx=12, pady=(14,2))
+        row += 1
+        ec_combo = ctk.CTkComboBox(left,
+            values=["Baixa (L)", "Média (M)", "Alta (Q)", "Máxima (H)"],
+            variable=self.error_correction_var
+        )
+        ec_combo.grid(row=row, column=0, sticky="we", padx=12, pady=6)
+        row += 1
+
+        # BOX_SIZE
+        ctk.CTkLabel(left, text="Tamanho da Caixinha (box_size)", anchor="w").grid(row=row, column=0, sticky="we", padx=12, pady=(14,2))
+        row += 1
+        self.boxsize_slider = ctk.CTkSlider(left, from_=5, to=20, variable=self.box_size_var, number_of_steps=15)
+        self.boxsize_slider.grid(row=row, column=0, sticky="we", padx=16, pady=6)
         row += 1
 
         ctk.CTkLabel(left, text="Logo ao Centro", anchor="w").grid(row=row, column=0, sticky="we", padx=12, pady=(14,2))
@@ -242,7 +268,6 @@ class QRCodeApp(ctk.CTk):
         preview_card.rowconfigure(0, weight=1)
         preview_card.rowconfigure(1, weight=1)
 
-        # Preview centralizado e maior
         self.preview_label = ctk.CTkLabel(preview_card, text="Preview", anchor="center", font=ctk.CTkFont(size=16, slant="italic"))
         self.preview_label.grid(row=0, column=0, padx=40, pady=(22,8), sticky="nsew")
         self.preview_canvas = ctk.CTkLabel(preview_card, text="", anchor="center")
@@ -263,6 +288,7 @@ class QRCodeApp(ctk.CTk):
 
         self.msg_label = ctk.CTkLabel(right, text="", anchor="center", font=ctk.CTkFont(size=12))
         self.msg_label.grid(row=2, column=0, pady=(10,4))
+        self._update_color_previews()
 
     def _bind_resize(self):
         self.bind("<Configure>", lambda e: self._update_preview_img())
@@ -279,7 +305,6 @@ class QRCodeApp(ctk.CTk):
         self.campos_dyn = {}
 
         def grid_dyn(widget, row, h=38):
-            # sticky="we" + columnconfigure garante expansão horizontal
             widget.grid(row=row, column=0, sticky="we", padx=6, pady=4)
             widget.configure(height=h)
 
@@ -341,8 +366,11 @@ class QRCodeApp(ctk.CTk):
             self.campos_dyn["valor"] = valor
 
     def _update_color_previews(self):
-        self.fg_color_preview.configure(bg_color=self.fg_color)
-        self.bg_color_preview.configure(bg_color=self.bg_color)
+        # "Cor dos Quadradinhos" = self.bg_color
+        # "Cor de Fundo" = self.fg_color
+        self.fg_color_preview.configure(bg_color=self.bg_color)
+        self.bg_color_preview.configure(bg_color=self.fg_color)
+
 
     def _atualizar_campos(self, event=None):
         self._criar_campos_dinamicos(self.tipo_var.get())
@@ -356,11 +384,12 @@ class QRCodeApp(ctk.CTk):
         if color and isinstance(color, str) and len(color) == 7 and color.startswith("#"):
             color = color.lower()
             if which == 'fg':
-                self.fg_color = color
+                self.fg_color = color   # Cor de fundo do QR
             elif which == 'bg':
-                self.bg_color = color
+                self.bg_color = color   # Cor dos quadradinhos
             self._update_color_previews()
             self._update_preview_img()
+
 
     def _selecionar_logo(self):
         filetypes = [("Imagens", "*.png *.jpg *.jpeg *.bmp *.gif"),("Todos arquivos","*.*")]
@@ -396,6 +425,13 @@ class QRCodeApp(ctk.CTk):
                 self._mostrar_msg("Preencha os campos obrigatórios!", error=True)
                 return
 
+            # Extrai “L”, “M”, “Q” ou “H” do texto selecionado
+            ec_val = self.error_correction_var.get()
+            if "(" in ec_val:
+                ec_val = ec_val.split("(")[-1][0]
+            else:
+                ec_val = "H"
+
             self.qr_img_pil = gerar_qrcode(
                 data,
                 size=self.size_var.get(),
@@ -404,7 +440,9 @@ class QRCodeApp(ctk.CTk):
                 border=self.border_var.get(),
                 module_style=self.mod_style_var.get(),
                 logo_path=self.logo_path,
-                auto_resize_logo=self.auto_resize_logo.get()
+                auto_resize_logo=self.auto_resize_logo.get(),
+                error_correction=ec_val,
+                box_size=self.box_size_var.get()
             )
             self._update_preview_img()
             self.save_btn.configure(state="normal")
@@ -416,7 +454,7 @@ class QRCodeApp(ctk.CTk):
     def _update_preview_img(self):
         if self.qr_img_pil is not None:
             size = self.size_var.get()
-            img = self.qr_img_pil.resize((min(340, size), min(340, size)), Image.LANCZOS)
+            img = self.qr_img_pil.resize((min(500, size), min(500, size)), Image.LANCZOS)
             tk_img = ImageTk.PhotoImage(img)
             self.preview_canvas.configure(image=tk_img)
             self.preview_canvas.image = tk_img
@@ -439,7 +477,6 @@ class QRCodeApp(ctk.CTk):
     def _copiar(self):
         try:
             import base64
-
             import pyperclip
             output = io.BytesIO()
             self.qr_img_pil.save(output, format="PNG")
@@ -457,6 +494,9 @@ class QRCodeApp(ctk.CTk):
         self.logo_preview.configure(text="(sem logo)")
         self.fg_color = "#FFFFFF"
         self.bg_color = "#000000"
+        self.error_correction_var.set("Máxima (H)")
+        self.box_size_var.set(10)
+        self.size_var.set(400)
         self._update_color_previews()
         self._update_preview_img()
         self._mostrar_msg("Campos e cores resetados.", error=False)
